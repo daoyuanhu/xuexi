@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线绘图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            background-color: #f0f0f0;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            z-index: 1000;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tool-group label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: #333333;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #555555;
+        }
+
+        button.active {
+            background-color: #2196F3;
+        }
+
+        button i {
+            margin-right: 5px;
+        }
+
+        #color, #bgColor {
+            width: 50px;
+            height: 30px;
+            padding: 0;
+            border: none;
+            border-radius: 4px;
+        }
+
+        #lineWidth {
+            width: 100px;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: white;
+            cursor: crosshair;
+        }
+
+        .selected-stroke {
+            outline: 2px dashed #333333;
+            outline-offset: 2px;
+        }
+
+        /* 修改提示栏样式 */
+        .tips-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 30px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 30px;
+            font-size: 14px;
+            color: #666;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            min-width: 380px;
+        }
+
+        .tip-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 24px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            z-index: 1;
+            flex: 1;
+            justify-content: center;
+        }
+
+        .tips-container::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 12px;
+            width: calc(50% - 27px);
+            height: calc(100% - 16px);
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 0;
+        }
+
+        .tips-container.select-mode::before {
+            transform: translateX(calc(100% + 42px));
+        }
+
+        .key {
+            display: inline-block;
+            padding: 3px 10px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        /* 修改状态提示框样式 */
+        .mode-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            padding: 30px 50px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            color: white;
+            font-size: 24px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            opacity: 0;
+            transition: all 0.15s ease;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            pointer-events: none;
+        }
+
+        .mode-indicator.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .mode-indicator i {
+            font-size: 28px;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="tool-group">
+            <label for="color">画笔颜色：</label>
+            <input type="color" id="color" value="#000000">
+        </div>
+        <div class="tool-group">
+            <label for="bgColor">背景颜色：</label>
+            <input type="color" id="bgColor" value="#ffffff">
+        </div>
+        <div class="tool-group">
+            <label for="lineWidth">线条粗细：</label>
+            <input type="range" id="lineWidth" min="1" max="50" value="5">
+        </div>
+        <div class="tool-group">
+            <label for="smoothness">平滑度：</label>
+            <input type="range" id="smoothness" min="0" max="100" value="50">
+        </div>
+        <button id="clear">清空画布</button>
+        <button id="save">保存图片</button>
+        <button id="undo">撤销</button>
+    </div>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <canvas id="canvas"></canvas>
+
+    <div class="tips-container">
+        <div class="tip-item" id="drawTip">
+            <span class="key">B</span>
+            <span>绘画模式</span>
+        </div>
+        <div class="tip-item" id="selectTip">
+            <span class="key">V</span>
+            <span>选择模式</span>
+        </div>
+    </div>
+
+    <!-- 添加状态提示框 -->
+    <div class="mode-indicator" id="modeIndicator">
+        <i class="fas fa-pencil-alt"></i>
+        <span>绘画模式</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('color');
+        const bgColorPicker = document.getElementById('bgColor');
+        const lineWidthPicker = document.getElementById('lineWidth');
+        const smoothnessPicker = document.getElementById('smoothness');
+        const clearBtn = document.getElementById('clear');
+        const saveBtn = document.getElementById('save');
+        const undoBtn = document.getElementById('undo');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let drawHistory = [];
+        let currentStep = -1;
+        let points = [];
+        let strokes = [];
+        let currentStroke = null;
+        let selectedStrokes = new Set();
+        let isSelectMode = false;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let draggedStrokes = new Set();
+        let strokesInitialPositions = new Map();
+        let isSelectionBox = false;
+        let selectionStartX = 0;
+        let selectionStartY = 0;
+        let selectionEndX = 0;
+        let selectionEndY = 0;
+
+        const selectionColors = [
+            '#333333', '#666666', '#999999', '#CCCCCC', '#000000'
+        ];
+
+        class Stroke {
+            constructor(color, width, smoothness) {
+                this.points = [];
+                this.color = color;
+                this.width = width;
+                this.smoothness = smoothness;
+                this.path = new Path2D();
+                this.bounds = { x: 0, y: 0, width: 0, height: 0 };
+            }
+
+            updateBounds() {
+                if (this.points.length === 0) return;
+                
+                // 考虑线条宽度和平滑度的影响
+                const padding = this.width / 2 + (this.smoothness * this.width);
+                
+                // 获取所有控制点的坐标
+                let allPoints = [...this.points];
+                
+                // 如果有足够的点来计算贝塞尔曲线，添加额外的控制点
+                if (this.points.length >= 3) {
+                    const tension = 0.3 + (this.smoothness * 0.7);
+                    for (let i = 1; i < this.points.length - 1; i++) {
+                        const p0 = this.points[Math.max(0, i - 1)];
+                        const p1 = this.points[i];
+                        const p2 = this.points[i + 1];
+                        const p3 = this.points[Math.min(this.points.length - 1, i + 2)];
+                        
+                        // 添加贝塞尔曲线的控制点
+                        const cp1x = p1.x + (p2.x - p0.x) * tension * this.smoothness;
+                        const cp1y = p1.y + (p2.y - p0.y) * tension * this.smoothness;
+                        const cp2x = p2.x - (p3.x - p1.x) * tension * this.smoothness;
+                        const cp2y = p2.y - (p3.y - p1.y) * tension * this.smoothness;
+                        
+                        allPoints.push({ x: cp1x, y: cp1y }, { x: cp2x, y: cp2y });
+                    }
+                }
+                
+                // 计算包含所有点的边界
+                const xs = allPoints.map(p => p.x);
+                const ys = allPoints.map(p => p.y);
+                
+                this.bounds = {
+                    x: Math.min(...xs) - padding,
+                    y: Math.min(...ys) - padding,
+                    width: Math.max(...xs) - Math.min(...xs) + padding * 2,
+                    height: Math.max(...ys) - Math.min(...ys) + padding * 2
+                };
+            }
+
+            addPoint(x, y) {
+                this.points.push({ x, y });
+                this.updateBounds();
+            }
+
+            move(dx, dy) {
+                this.points = this.points.map(point => ({
+                    x: point.x + dx,
+                    y: point.y + dy
+                }));
+                this.updateBounds();
+            }
+
+            draw(ctx) {
+                if (this.points.length < 2) return;
+
+                ctx.save();
+                
+                // 绘制实际的线条
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+                
+                if (this.points.length < 3) {
+                    ctx.lineTo(this.points[1].x, this.points[1].y);
+                } else {
+                    const tension = 0.3 + (this.smoothness * 0.7);
+                    const segment = Math.max(1, Math.floor(4 * this.smoothness));
+                    
+                    for (let i = 0; i < this.points.length - 1; i++) {
+                        const p0 = this.points[Math.max(0, i - 1)];
+                        const p1 = this.points[i];
+                        const p2 = this.points[i + 1];
+                        const p3 = this.points[Math.min(this.points.length - 1, i + 2)];
+                        
+                        const cp1x = p1.x + (p2.x - p0.x) * tension * this.smoothness;
+                        const cp1y = p1.y + (p2.y - p0.y) * tension * this.smoothness;
+                        const cp2x = p2.x - (p3.x - p1.x) * tension * this.smoothness;
+                        const cp2y = p2.y - (p3.y - p1.y) * tension * this.smoothness;
+                        
+                        for (let t = 0; t <= segment; t++) {
+                            const tt = t / segment;
+                            const ttt = tt * tt;
+                            const tttt = ttt * tt;
+                            
+                            const x = (2 * tttt - 3 * ttt + 1) * p1.x +
+                                    (tttt - 2 * ttt + tt) * (cp1x - p1.x) * 3 +
+                                    (-2 * tttt + 3 * ttt) * p2.x +
+                                    (tttt - ttt) * (cp2x - p2.x) * 3;
+                                    
+                            const y = (2 * tttt - 3 * ttt + 1) * p1.y +
+                                    (tttt - 2 * ttt + tt) * (cp1y - p1.y) * 3 +
+                                    (-2 * tttt + 3 * ttt) * p2.y +
+                                    (tttt - ttt) * (cp2y - p2.y) * 3;
+                            
+                            ctx.lineTo(x, y);
+                        }
+                    }
+                }
+                
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.width;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+
+                // 绘制选中效果
+                if (selectedStrokes.has(this)) {
+                    const colorIndex = Array.from(selectedStrokes).indexOf(this) % selectionColors.length;
+                    const borderColor = selectionColors[colorIndex];
+                    
+                    // 绘制高亮效果
+                    ctx.strokeStyle = `${borderColor}44`;
+                    ctx.lineWidth = this.width + 4;
+                    ctx.stroke();
+                    
+                    // 绘制边界框
+                    ctx.strokeStyle = borderColor;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeRect(
+                        this.bounds.x,
+                        this.bounds.y,
+                        this.bounds.width,
+                        this.bounds.height
+                    );
+                }
+                
+                ctx.restore();
+            }
+
+            containsPoint(x, y) {
+                const tolerance = this.width + 5;
+                
+                for (let i = 1; i < this.points.length; i++) {
+                    const p1 = this.points[i - 1];
+                    const p2 = this.points[i];
+                    
+                    const A = x - p1.x;
+                    const B = y - p1.y;
+                    const C = p2.x - p1.x;
+                    const D = p2.y - p1.y;
+                    
+                    const dot = A * C + B * D;
+                    const len_sq = C * C + D * D;
+                    
+                    let param = -1;
+                    if (len_sq !== 0) param = dot / len_sq;
+                    
+                    let xx, yy;
+                    
+                    if (param < 0) {
+                        xx = p1.x;
+                        yy = p1.y;
+                    } else if (param > 1) {
+                        xx = p2.x;
+                        yy = p2.y;
+                    } else {
+                        xx = p1.x + param * C;
+                        yy = p1.y + param * D;
+                    }
+                    
+                    const dx = x - xx;
+                    const dy = y - yy;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance <= tolerance) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        function applyBackground() {
+            ctx.fillStyle = bgColorPicker.value;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            applyBackground();
+        }
+
+        function saveState() {
+            currentStep++;
+            if (currentStep < drawHistory.length) {
+                drawHistory.length = currentStep;
+            }
+            drawHistory.push({
+                strokes: JSON.parse(JSON.stringify(strokes.map(stroke => ({
+                    points: stroke.points,
+                    color: stroke.color,
+                    width: stroke.width,
+                    smoothness: stroke.smoothness
+                })))),
+                backgroundColor: bgColorPicker.value
+            });
+        }
+
+        resizeCanvas();
+        saveState();
+
+        bgColorPicker.addEventListener('change', () => {
+            applyBackground();
+            saveState();
+        });
+        
+        bgColorPicker.addEventListener('input', () => {
+            applyBackground();
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const mouseEvent = new MouseEvent('mouseup');
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        function showModeIndicator(mode) {
+            const indicator = document.getElementById('modeIndicator');
+            const icon = indicator.querySelector('i');
+            const text = indicator.querySelector('span');
+            
+            // 更新图标和文本
+            if (mode === 'draw') {
+                icon.className = 'fas fa-pencil-alt';
+                text.textContent = '绘画模式';
+            } else {
+                icon.className = 'fas fa-mouse-pointer';
+                text.textContent = '选择模式';
+            }
+            
+            // 显示提示
+            indicator.classList.add('show');
+        }
+
+        function setMode(mode) {
+            isSelectMode = mode === 'select';
+            canvas.style.cursor = isSelectMode ? 'default' : 'crosshair';
+            
+            // 更新提示状态
+            document.getElementById('drawTip').classList.toggle('active', !isSelectMode);
+            document.getElementById('selectTip').classList.toggle('active', isSelectMode);
+            document.querySelector('.tips-container').classList.toggle('select-mode', isSelectMode);
+            
+            // 显示模式提示
+            showModeIndicator(mode);
+            
+            if (!isSelectMode) {
+                selectedStrokes.clear();
+            }
+            redraw();
+        }
+
+        function startDrawing(e) {
+            if (isSelectMode) {
+                const x = e.clientX;
+                const y = e.clientY;
+                
+                let hitStroke = false;
+                for (let i = strokes.length - 1; i >= 0; i--) {
+                    const stroke = strokes[i];
+                    if (stroke.containsPoint(x, y)) {
+                        hitStroke = true;
+                        if (e.shiftKey) {
+                            if (selectedStrokes.has(stroke)) {
+                                selectedStrokes.delete(stroke);
+                            } else {
+                                selectedStrokes.add(stroke);
+                            }
+                        } else {
+                            if (!selectedStrokes.has(stroke)) {
+                                selectedStrokes.clear();
+                                selectedStrokes.add(stroke);
+                            }
+                        }
+                        
+                        if (selectedStrokes.has(stroke)) {
+                            isDragging = true;
+                            dragStartX = x;
+                            dragStartY = y;
+                            draggedStrokes = new Set(selectedStrokes);
+                            strokesInitialPositions.clear();
+                            draggedStrokes.forEach(s => {
+                                strokesInitialPositions.set(s, s.points.map(p => ({x: p.x, y: p.y})));
+                            });
+                        }
+                        break;
+                    }
+                }
+                
+                if (!hitStroke) {
+                    isSelectionBox = true;
+                    selectionStartX = x;
+                    selectionStartY = y;
+                    selectionEndX = x;
+                    selectionEndY = y;
+                    if (!e.shiftKey) {
+                        selectedStrokes.clear();
+                    }
+                }
+                redraw();
+                return;
+            }
+
+            isDrawing = true;
+            currentStroke = new Stroke(
+                colorPicker.value,
+                lineWidthPicker.value,
+                smoothnessPicker.value / 100
+            );
+            currentStroke.addPoint(e.clientX, e.clientY);
+            [lastX, lastY] = [e.clientX, e.clientY];
+        }
+
+        function draw(e) {
+            if (isSelectMode) {
+                if (isDragging) {
+                    const dx = e.clientX - dragStartX;
+                    const dy = e.clientY - dragStartY;
+                    
+                    draggedStrokes.forEach(stroke => {
+                        const initialPoints = strokesInitialPositions.get(stroke);
+                        stroke.points = initialPoints.map(p => ({
+                            x: p.x + dx,
+                            y: p.y + dy
+                        }));
+                        stroke.bounds.x = stroke.points[0].x;
+                        stroke.bounds.y = stroke.points[0].y;
+                    });
+                    
+                    redraw();
+                } else if (isSelectionBox) {
+                    selectionEndX = e.clientX;
+                    selectionEndY = e.clientY;
+                    redraw();
+                    
+                    ctx.save();
+                    ctx.strokeStyle = '#333333';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeRect(
+                        selectionStartX,
+                        selectionStartY,
+                        selectionEndX - selectionStartX,
+                        selectionEndY - selectionStartY
+                    );
+                    
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                    ctx.fillRect(
+                        selectionStartX,
+                        selectionStartY,
+                        selectionEndX - selectionStartX,
+                        selectionEndY - selectionStartY
+                    );
+                    ctx.restore();
+                }
+                return;
+            }
+            if (!isDrawing) return;
+            
+            currentStroke.addPoint(e.clientX, e.clientY);
+            redraw();
+            [lastX, lastY] = [e.clientX, e.clientY];
+        }
+
+        function stopDrawing() {
+            if (isSelectionBox) {
+                const left = Math.min(selectionStartX, selectionEndX);
+                const right = Math.max(selectionStartX, selectionEndX);
+                const top = Math.min(selectionStartY, selectionEndY);
+                const bottom = Math.max(selectionStartY, selectionEndY);
+                
+                strokes.forEach(stroke => {
+                    const bounds = stroke.bounds;
+                    if (bounds.x < right && 
+                        bounds.x + bounds.width > left && 
+                        bounds.y < bottom && 
+                        bounds.y + bounds.height > top) {
+                        selectedStrokes.add(stroke);
+                    }
+                });
+                
+                isSelectionBox = false;
+                redraw();
+            }
+
+            if (isDragging) {
+                isDragging = false;
+                draggedStrokes = new Set();
+                strokesInitialPositions.clear();
+                saveState();
+            }
+
+            if (isDrawing) {
+                isDrawing = false;
+                if (currentStroke && currentStroke.points.length > 1) {
+                    strokes.push(currentStroke);
+                    saveState();
+                }
+                currentStroke = null;
+            }
+        }
+
+        function redraw() {
+            applyBackground();
+            for (const stroke of strokes) {
+                stroke.draw(ctx);
+            }
+            if (currentStroke) {
+                currentStroke.draw(ctx);
+            }
+        }
+
+        clearBtn.addEventListener('click', () => {
+            strokes = [];
+            selectedStrokes.clear();
+            redraw();
+            saveState();
+        });
+
+        saveBtn.addEventListener('click', () => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const dateStr = `${year}${month}${day}`;
+            
+            const randomNum = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+            
+            const fileName = `daoyuan-${dateStr}-${randomNum}.png`;
+            
+            const link = document.createElement('a');
+            link.download = fileName;
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+
+        undoBtn.addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                const state = drawHistory[currentStep];
+                bgColorPicker.value = state.backgroundColor;
+                strokes = state.strokes.map(strokeData => {
+                    const stroke = new Stroke(
+                        strokeData.color,
+                        strokeData.width,
+                        strokeData.smoothness
+                    );
+                    stroke.points = strokeData.points;
+                    return stroke;
+                });
+                selectedStrokes.clear();
+                redraw();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'v' && !e.metaKey && !e.ctrlKey) {
+                e.preventDefault();
+                setMode('select');
+                redraw();
+            } else if (e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                setMode('draw');
+                redraw();
+            } else if (e.key.toLowerCase() === 'a' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                if (isSelectMode) {
+                    selectedStrokes = new Set(strokes);
+                    redraw();
+                }
+            } else if ((e.key === 'Backspace' || e.key === 'Delete') && isSelectMode) {
+                if (selectedStrokes.size > 0) {
+                    strokes = strokes.filter(stroke => !selectedStrokes.has(stroke));
+                    selectedStrokes.clear();
+                    redraw();
+                    saveState();
+                }
+            }
+        });
+
+        smoothnessPicker.addEventListener('input', () => {
+            if (selectedStrokes.size > 0) {
+                selectedStrokes.forEach(stroke => {
+                    stroke.smoothness = smoothnessPicker.value / 100;
+                });
+                redraw();
+            }
+        });
+
+        // 添加点击事件监听
+        document.getElementById('drawTip').addEventListener('click', () => {
+            setMode('draw');
+        });
+
+        document.getElementById('selectTip').addEventListener('click', () => {
+            setMode('select');
+        });
+
+        // 添加键盘松开事件监听
+        document.addEventListener('keyup', (e) => {
+            const indicator = document.getElementById('modeIndicator');
+            indicator.classList.remove('show');
+        });
+
+        // 初始化绘画模式的提示状态
+        document.getElementById('drawTip').classList.add('active');
+    </script>
+</body>
+</html>
