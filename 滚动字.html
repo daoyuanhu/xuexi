@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手机提示词</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scroll-snap-type: y mandatory;
+        }
+
+        .control-panel {
+            height: 100vh;
+            padding: 15px;
+            background: #f5f5f5;
+            scroll-snap-align: start;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .text-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .color-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .color-input {
+            width: 50px;
+            height: 40px;
+            padding: 0;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .size-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .size-slider {
+            flex: 1;
+        }
+
+        .display-area {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            scroll-snap-align: start;
+        }
+
+        .text-display {
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+            width: 100%;
+            font-weight: bold;
+            white-space: nowrap;
+            animation: scrollText 15s linear infinite;
+        }
+
+        @keyframes scrollText {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+
+        .text-display.no-scroll {
+            animation: none;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .control-button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .control-button:hover {
+            opacity: 0.9;
+        }
+
+        .control-button.secondary {
+            background: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div class="control-panel">
+        <div class="control-group">
+            <label>输入文字：</label>
+            <input type="text" id="textInput" class="text-input" value="提示词" placeholder="请输入要显示的文字">
+        </div>
+        
+        <div class="control-group">
+            <label>背景颜色：</label>
+            <input type="color" id="bgColor" class="color-input" value="#000000">
+        </div>
+        
+        <div class="control-group">
+            <label>文字颜色：</label>
+            <input type="color" id="textColor" class="color-input" value="#ffffff">
+        </div>
+        
+        <div class="control-group">
+            <label>文字大小：<span id="sizeDisplay">100</span>px</label>
+            <div class="size-group">
+                <input type="range" id="fontSize" class="size-slider" min="20" max="200" value="100">
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="control-button" id="fullscreen">全屏显示</button>
+            <button class="control-button secondary" id="reset">重置设置</button>
+        </div>
+    </div>
+
+    <div class="display-area" id="displayArea">
+        <div class="text-display" id="textDisplay">提示词</div>
+    </div>
+
+    <script>
+        const textInput = document.getElementById('textInput');
+        const bgColor = document.getElementById('bgColor');
+        const textColor = document.getElementById('textColor');
+        const fontSize = document.getElementById('fontSize');
+        const sizeDisplay = document.getElementById('sizeDisplay');
+        const displayArea = document.getElementById('displayArea');
+        const textDisplay = document.getElementById('textDisplay');
+        const fullscreenBtn = document.getElementById('fullscreen');
+        const resetBtn = document.getElementById('reset');
+
+        function updateDisplay() {
+            textDisplay.textContent = textInput.value;
+            displayArea.style.backgroundColor = bgColor.value;
+            textDisplay.style.color = textColor.value;
+            textDisplay.style.fontSize = `${fontSize.value}px`;
+            sizeDisplay.textContent = fontSize.value;
+
+            setTimeout(() => {
+                const containerWidth = displayArea.offsetWidth;
+                const textWidth = textDisplay.scrollWidth;
+                
+                if (textWidth > containerWidth) {
+                    textDisplay.classList.remove('no-scroll');
+                } else {
+                    textDisplay.classList.add('no-scroll');
+                }
+            }, 0);
+        }
+
+        textInput.addEventListener('input', updateDisplay);
+        bgColor.addEventListener('input', updateDisplay);
+        textColor.addEventListener('input', updateDisplay);
+        fontSize.addEventListener('input', updateDisplay);
+
+        fullscreenBtn.addEventListener('click', () => {
+            if (displayArea.requestFullscreen) {
+                displayArea.requestFullscreen();
+            } else if (displayArea.webkitRequestFullscreen) {
+                displayArea.webkitRequestFullscreen();
+            } else if (displayArea.msRequestFullscreen) {
+                displayArea.msRequestFullscreen();
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            textInput.value = '提示词';
+            bgColor.value = '#000000';
+            textColor.value = '#ffffff';
+            fontSize.value = 100;
+            updateDisplay();
+        });
+
+        updateDisplay();
+    </script>
+</body>
+</html>
