@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>实时金价监控</title>
+    <style>
+        body {
+            background-color: #000000;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            overflow: hidden;
+        }
+
+        /* 顶部美元价格：超大、白色 */
+        #usd-price {
+            color: #FFFFFF;
+            font-size: 20vw;
+            font-weight: 800;
+            line-height: 0.9;
+        }
+
+        /* 底部人民币价格：灰色、略小 */
+        #cny-price {
+            color: #666666;
+            font-size: 7vw;
+            font-weight: 400;
+            margin-top: 10px;
+        }
+
+        .unit {
+            font-size: 2vw;
+            color: #333;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="usd-price">...</div>
+    <div id="cny-price">... <span class="unit">元/克</span></div>
+
+    <script>
+        let currentRate = 7.25; // 初始默认汇率
+
+        // 1. 获取实时汇率 (每小时更新一次即可)
+        async function getExchangeRate() {
+            try {
+                const res = await fetch('https://open.er-api.com/v6/latest/USD');
+                const data = await res.json();
+                if (data && data.rates && data.rates.CNY) {
+                    currentRate = data.rates.CNY;
+                }
+            } catch (e) { console.error("汇率获取失败"); }
+        }
+
+        // 2. 获取实时金价 (高频刷新)
+        async function updateGoldPrice() {
+            const usdEl = document.getElementById('usd-price');
+            const cnyEl = document.getElementById('cny-price');
+
+            try {
+                // 使用 Binance 接口，数据最稳且不需要 Key
+                const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
+                const data = await res.json();
+                
+                if (data && data.price) {
+                    const usdPrice = parseFloat(data.price);
+                    const cnyGramPrice = (usdPrice * currentRate) / 31.1035;
+
+                    // 更新显示
+                    usdEl.innerText = usdPrice.toFixed(2);
+                    cnyEl.innerHTML = cnyGramPrice.toFixed(2) + '<span class="unit">元/克</span>';
+                }
+            } catch (e) {
+                usdEl.innerText = "网络异常";
+            }
+        }
+
+        // 初始启动
+        getExchangeRate();
+        updateGoldPrice();
+
+        // 自动刷新：价格每3秒刷一次，汇率每小时刷一次
+        setInterval(updateGoldPrice, 3000);
+        setInterval(getExchangeRate, 3600000);
+    </script>
+</body>
+</html>

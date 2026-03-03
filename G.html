@@ -1,20 +1,64 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>Gold Price Widget</title>
+    <meta charset="UTF-8">
+    <title>纯净金价</title>
+    <style>
+        /* 全屏纯黑，没有任何杂质 */
+        body {
+            background-color: #000000;
+            color: #FFD700; /* 经典的黄金色 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* 巨大的数字显示 */
+        #gold-price {
+            font-size: 15vw; /* 随窗口大小自动缩放的超大字体 */
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .unit {
+            font-size: 2vw;
+            color: #444;
+            margin-top: 20px;
+            letter-spacing: 5px;
+        }
+    </style>
 </head>
-<body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#000;">
+<body>
 
-<!-- TradingView Single Ticker Widget BEGIN -->
-<div class="tradingview-widget-container">
-  <iframe 
-    src="https://s.tradingview.com/embed-widget-single-ticker/?symbol=COMEX:GC1!"
-    style="width: 300px; height: 80px; border: none;"
-    scrolling="no"
-  ></iframe>
-</div>
-<!-- TradingView Single Ticker Widget END -->
+    <div id="gold-price">---.--</div>
+    <div class="unit">USD / OZ</div>
 
+    <script>
+        // 直接从公开接口获取，不需要任何 Key
+        async function refreshPrice() {
+            try {
+                // 使用公共 API 获取现货黄金 (XAU) 价格
+                const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
+                const data = await res.json();
+                
+                // PAXG 是锚定黄金的代币，价格与国际金价基本 1:1，且数据极快
+                if (data && data.price) {
+                    const price = parseFloat(data.price).toFixed(2);
+                    document.getElementById('gold-price').innerText = price;
+                }
+            } catch (e) {
+                console.error("刷新失败");
+            }
+        }
+
+        // 没秒刷新一次，感受心跳感
+        setInterval(refreshPrice, 2000);
+        refreshPrice();
+    </script>
 </body>
 </html>
